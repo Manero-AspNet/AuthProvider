@@ -13,14 +13,24 @@ using Newtonsoft.Json;
 
 namespace AuthProvider.Functions;
 
-public class SignUp(ILogger<SignUp> logger, ServiceBusClient serviceBusClient, ISignUpService signUpService)
+public class SignUp
 {
-    private readonly ILogger<SignUp> _logger = logger;
-    private readonly ServiceBusClient _serviceBusClient = serviceBusClient;
-    private readonly ISignUpService _signUpService = signUpService;
+    private readonly ILogger<SignUp> _logger;
+    private readonly ISignUpService _signUpService;
+    private readonly ServiceBusClient _client;
+    private ServiceBusSender _verificationSender;
+    private ServiceBusSender _accountSender;
+
+    public SignUp(ILogger<SignUp> logger, ISignUpService signUpService, ServiceBusClient client)
+    {
+        _logger = logger;
+        _signUpService = signUpService;
+        _client = client;
+        _verificationSender = _client.CreateSender("verification_request");
+        _accountSender = _client.CreateSender("create_account_request");
+    }
 
     [Function("SignUp")]
-    [ServiceBusOutput("verification_request", Connection = "ServiceBus")]
     public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
     {
         try
@@ -35,17 +45,26 @@ public class SignUp(ILogger<SignUp> logger, ServiceBusClient serviceBusClient, I
                     if (userEntity != null)
                     {
                         var vr = _signUpService.GenerateVerificationRequest(userEntity);
-                        if (vr != null)
+                        var ar = await _signUpService.GenerateAccountRequest(userEntity);
+                        if (vr != null && ar != null!)
                         {
-                            var payload = _signUpService.GenerateServiceBusMessage(vr);
+                            var verifictionPayload = _signUpService.GenerateServiceBusMessage(vr);
+                            var accountPayload = _signUpService.GenerateServiceBusMessage(ar);
 
-                            if(!string.IsNullOrEmpty(payload))
+                            if(!string.IsNullOrEmpty(verifictionPayload) && !string.IsNullOrEmpty(accountPayload))
                             {
-                                var sender = _serviceBusClient.CreateSender("verification_request");
-                                await sender.SendMessageAsync(new ServiceBusMessage(payload)
+                                var verificationMessage = new ServiceBusMessage(verifictionPayload)
                                 {
                                     ContentType= "application/json",
-                                });
+                                };
+
+                                var accountMessage = new ServiceBusMessage(accountPayload)
+                                {
+                                    ContentType = "application/json",
+                                };
+                                await _verificationSender.SendMessageAsync(verificationMessage);
+                                await _accountSender.SendMessageAsync(accountMessage);
+
                                 return new CreatedResult();
                             }
                         }
