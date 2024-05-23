@@ -107,7 +107,57 @@ public class SignUpService(ILogger<SignUpService> logger, DataContext context, U
 
     }
 
+    public async Task<AccountRequest> GenerateAccountRequest(UserEntity entity)
+    {
+        try
+        {
+            if (entity != null)
+            {
+                var userEntity = await _userManager.FindByEmailAsync(entity.Email!);
+
+                if (userEntity != null)
+                {
+                    var accountRequest = new AccountRequest
+                    {
+                        UserId = userEntity.Id,
+                        FirstName = userEntity.FirstName,
+                        LastName = userEntity.LastName,
+                        Email = userEntity.Email!,
+                    };
+                    if (accountRequest != null)
+                    {
+                        return accountRequest;
+                    }
+                }
+
+
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"ERROR : SignUpService.GenerateVerificationRequest() :: {ex.Message}");
+        }
+        return null!;
+    }
+
     public string GenerateServiceBusMessage(VerificationRequest request)
+    {
+        try
+        {
+            var payload = JsonConvert.SerializeObject(request);
+            if (!string.IsNullOrEmpty(payload))
+            {
+                return payload;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"ERROR : SignUpService.GenerateServiceBusMessage() :: {ex.Message}");
+        }
+        return null!;
+    }
+
+    public string GenerateServiceBusMessage(AccountRequest request)
     {
         try
         {
