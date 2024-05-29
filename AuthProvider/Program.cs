@@ -2,11 +2,17 @@ using AuthProvider.Data.Contexts;
 using AuthProvider.Data.Entities;
 using AuthProvider.Services;
 using Azure.Messaging.ServiceBus;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
+var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
+var configuration = builder.Configuration;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
@@ -25,7 +31,15 @@ var host = new HostBuilder()
             x.Password.RequiredLength = 8;
         }).AddEntityFrameworkStores<DataContext>()
           .AddDefaultTokenProviders();
+
+        services.AddAuthentication().AddFacebook(facebookOptions =>
+        {
+            facebookOptions.AppId = configuration["FaceBookAppId"]!;
+            facebookOptions.AppSecret = configuration["FaceBookAppSecret"]!;
+        });
     })
     .Build();
 
-host.Run();
+
+
+host.Run(); 
